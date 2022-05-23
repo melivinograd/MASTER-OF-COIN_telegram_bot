@@ -9,8 +9,11 @@ import sched, time
 from telebot import types
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime
+from dotenv import load_dotenv
 
-API_TOKEN = "<API_KEY>"
+load_dotenv()
+
+API_TOKEN = os.getenv("API_TOKEN")
 
 commands = {  # command description used in the "help" command
     'help'    : 'Display this menu',
@@ -18,7 +21,6 @@ commands = {  # command description used in the "help" command
     'show' : 'Show sum spendings',
     'history' : 'Show spending history',
     'clear': 'debugger: clear all your records',
-    'feedback': 'Yay or Nay? Tell me how I can be better!'
 }
 
 dateFormat = '%d-%b-%Y'
@@ -32,7 +34,6 @@ CATEGORIES = ['Food', 'Groceries', 'Transport', 'Shopping']
 SHOW_MODE = ['Day', 'Month']
 bot = telebot.TeleBot(API_TOKEN)
 
-# telebot.logger.setLevel(logging.DEBUG)
 telebot.logger.setLevel(logging.INFO)
 
 
@@ -51,10 +52,10 @@ bot.set_update_listener(listener)  # register listener
 
 def writeJson(global_users_dict):
     try:
-        with open('data.json', 'w') as json_file: 
+        with open('data.json', 'w') as json_file:
             json.dump(global_users_dict, json_file, ensure_ascii=False, indent=4)
     except FileNotFoundError:
-        print('!!!!!!!!!!!!!!!!!!! File data.json not found !!!!!!!!!!!!!!!!!!!')
+        print("No json file, creating one!")
 
 
 def loadJson():
@@ -64,21 +65,14 @@ def loadJson():
             with open('data.json') as json_file:
                 data = json.load(json_file)
             global_users_dict = data    #assign loaded file to global users
-        # else:
-        #     print("!!!!!!!!!!!!  file is empty !!!!!!!!!!!!!!!!")
     except FileNotFoundError:
         print('!!!!!!!!!!!!!!!!!!! File data.json not found !!!!!!!!!!!!!!!!!!!')
-
-
 
 
 # handle the "/start" command
 @bot.message_handler(commands=['start','help'])
 def command_start(m):
-    loadJson()
-    global global_users_dict
     cid = m.chat.id
-        
     help_text = "Welcome! I am the Master Of Coin, how can I help you today?\nThe following commands are available: \n\n"
     for key in commands:  # generate help text out of the commands dictionary defined at the top
         help_text += "/" + key + ": "
@@ -94,12 +88,10 @@ def command_show(message):
     if history == None:
         bot.send_message(cid, "I'm sorry! It appears that you do not have any spending records!")
     else:
-        # bot.send_message(cid, "Patience! I have not learned how to do this yet! Come back next time!")
         markup = types.ReplyKeyboardMarkup(one_time_keyboard=True)
         markup.row_width = 2
         for mode in SHOW_MODE:
             markup.add(mode)
-        # markup.add('Day', 'Month')
         msg = bot.reply_to(message, 'Show Spendings For?', reply_markup=markup)
         bot.register_next_step_handler(msg, process_show_spending)
 
@@ -118,7 +110,7 @@ def calculate_spendings(queryResult):
     for key, value in total_dict.items():
         total_text += str(key) + " $" + str(value) + "\n"
     return total_text
-        
+
 def process_show_spending(message):
     try:
         cid = message.chat.id
@@ -131,10 +123,6 @@ def process_show_spending(message):
         if history is None:
             raise Exception("I'm sorry! It appears that you do not have any spending records!")
 
-        bot.send_message(cid, "Hold on! Gathering my thoughts...")
-        bot.send_chat_action(cid, 'typing')  # show the bot "typing" (max. 5 secs)
-        time.sleep(0.5)
-        
         total_text = ""
 
         if DayWeekMonth == 'Day':
@@ -150,7 +138,7 @@ def process_show_spending(message):
             spending_text = "You have no spendings for current {}!".format(DayWeekMonth)
         else:
             spending_text = "Here are your total spendings for current {}:\nCATEGORIES,AMOUNT \n----------------------\n{}".format(DayWeekMonth.lower(), total_text)
-            
+
         bot.send_message(cid, spending_text)
     except Exception as e:
         bot.reply_to(message, 'Opps! ' + str(e))
@@ -173,7 +161,7 @@ def command_history(message):
         else:
             for s in history:
                 total_spending_text += str(s) + "\n"
-        bot.send_message(cid, total_spending_text)      
+        bot.send_message(cid, total_spending_text)
     except Exception as e:
         bot.reply_to(message, 'Opps! ' + str(e))
 
@@ -187,17 +175,16 @@ def command_new(message):
     markup.row_width = 2
     for cat in CATEGORIES:
         markup.add(cat)
-    #markup.add('Food', 'Groceries', 'Transport', 'Shopping')
     msg = bot.reply_to(message, 'Select Category', reply_markup=markup)
     bot.register_next_step_handler(msg, process_category_step)
 
-def validateAmount(amountStr):    
+def validateAmount(amountStr):
     if len(amountStr) > 0 and len(amountStr) <= 15:
-        if amountStr.isdigit: 
+        if amountStr.isdigit:
             if re.match("^[0-9]*\\.?[0-9]*$", amountStr):
                 amount = round(float(amountStr),2)
                 if amount > 0:
-                    return str(amount)                
+                    return str(amount)
     return 0
 
 def process_category_step(message):
@@ -215,9 +202,7 @@ def process_category_step(message):
 
 def process_amount_step(message):
     try:
-        # global global_users_dict
         cid = message.chat.id
-        # history = getUserHistory(cid)
         amount_text = message.text
         amount_num = validateAmount(message.text) #validate
         if amount_num == 0: #cannot be $0 spending
@@ -227,7 +212,7 @@ def process_amount_step(message):
         dtText, catText, amtText = str(dt), str(choice[cid]), str(amount_num)
         writeJson(addUserHistory(cid,"{},{},{}".format(dtText,catText,amtText)))
         bot.send_message(cid, 'Recorded: You spent ${} for {} on {}'.format(amtText,catText,dtText))
-       
+
     except Exception as e:
         bot.reply_to(message, 'Opps! ' + str(e))
 
@@ -249,7 +234,7 @@ def addUserHistory(cid, recordText):
     # getUserHistory(cid).append(recordText)
     if not (str(cid) in global_users_dict):
         global_users_dict[str(cid)] = []
-        
+
     global_users_dict[str(cid)].append(recordText)
     return global_users_dict
 
@@ -266,51 +251,23 @@ def command_clear(message):
     else:
         clear_history_text = "I'm sorry! It appears that you do not have any spending records!"
     bot.send_message(cid, clear_history_text)
-    
-    
 
-def process_feed_back(message):
-    cid = message.chat.id
-    feedback_text = message.text
-    print("****************FEEDBACK********************")
-    print("chatid:{} feedback: {}".format(str(cid),feedback_text))
-    print("*********************************************")
-    bot.send_message(cid, 'Got it! Thanks for the feedback!')
-
-# handle "/feedback" command
-@bot.message_handler(commands=['feedback'])
-def command_feedback(message):
-    cid = message.chat.id
-    message = bot.send_message(cid, 'How can I be a better bot? Any feedback is appreciated!')
-    bot.register_next_step_handler(message, process_feed_back)
 
 # default handler for every other text
 @bot.message_handler(func=lambda message: True, content_types=['text'])
 def command_default(m):
-    # this is the standard reply to a normal message
     bot.send_message(m.chat.id, "I don't understand \"" + m.text + "\"\nMaybe try the help page at /help")
 
-# Enable saving next step handlers to file "./.handlers-saves/step.save".
-# Delay=2 means that after any change in next step handlers (e.g. calling register_next_step_handler())
-# saving will hapen after delay 2 seconds.
 bot.enable_save_next_step_handlers(delay=2)
-
-# Load next_step_handlers from save file (default "./.handlers-saves/step.save")
-# WARNING It will work only if enable_save_next_step_handlers was called!
 bot.load_next_step_handlers()
-
-# bot.polling(none_stop=True)
-
-
 
 def main():
 	try:
-		bot.polling(none_stop=True)
+         bot.polling(non_stop=True)
 	except Exception:
-		time.sleep(5)
-		print("Internet error!")
+	    print("Internet error!")
 
 if __name__ == '__main__':
 	main()
-    
-  
+
+
